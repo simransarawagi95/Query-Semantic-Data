@@ -1,0 +1,141 @@
+1)Find all movies directed by Christopher Nolan that were rated "PG-13" by the MPAA.
+
+SELECT DISTINCT ?MovieLabel (GROUP_CONCAT(DISTINCT ?actorname; separator=", ") AS ?Cast) 
+WHERE {
+  ?movie wdt:P31 wd:Q11424. #find instances of movie type
+  ?movie wdt:P57 wd:Q25191. #find director Christopher Nolan(Q25191)
+  ?movie wdt:P1657 wd:Q18665339. #find MPAA PG_13 rating
+  ?movie wdt:P161 ?actors. #find all the actors of the movies
+   SERVICE wikibase:label {  #SERVICE is the keyword to retrieve all labels
+   bd:serviceParam wikibase:language "en".
+   ?movie rdfs:label ?MovieLabel.
+   ?actors rdfs:label ?actorname.
+   }
+  }GROUP BY ?MovieLabel
+
+
+
+
+2)Movies adapted from books by Stephen King and find the actors starring in the movies.
+
+SELECT DISTINCT ?MovieLabel (GROUP_CONCAT(DISTINCT ?actorname; separator=", ") AS ?Cast) 
+WHERE {
+  ?movie wdt:P31 wd:Q11424. #select instances of movie type
+  ?movie wdt:P136 ?genre. #find the genre related to the movies
+  ?movie wdt:P144 ?basedon. #find all the categories the movie is based on
+  ?basedon wdt:P31 wd:Q7725634. #select instances of categories based on literary work
+  ?basedon wdt:P50 wd:Q39829. #select literary work written by Stephen King
+  ?movie wdt:P161 ?actors. #find all the actors of the movie
+  FILTER((REGEX(?genrename, "book", "i")) || (REGEX(?genrename, "novel", "i"))) #filter genre based on books or novel
+  SERVICE wikibase:label {
+  bd:serviceParam wikibase:language "en".
+  ?movie rdfs:label ?MovieLabel.
+  ?genre rdfs:label ?genrename.
+  ?actors rdfs:label ?actorname.
+   }
+  }GROUP BY ?MovieLabel
+
+
+3)Query to give a list of all movies that were nominated for Academy Award for Best Cinematography and whether that movie won that award or not.
+
+SELECT DISTINCT ?MovieLabel ?NominatedAward ?AwardWon
+WHERE {
+  ?movie wdt:P31 wd:Q11424.  # Select only instances of 'film'
+  ?movie wdt:P1411 ?nomaward. #select all the awards the movie is nominated for
+  ?movie wdt:P166 ?listofAwardWon #select all the awards the movie won
+  SERVICE wikibase:label {
+    bd:serviceParam wikibase:language "en".  # Set the language for labels
+    ?movie rdfs:label ?MovieLabel.  # Retrieve the label of the movie
+    ?nomaward rdfs:label ?NominatedAward.
+    ?listofAwardWon rdfs:label ?awardwonlabel               
+  }
+  FILTER(REGEX(?NominatedAward, "^academy award.*", "i")).
+  BIND(IF(?NominatedAward = ?awardwonlabel, "Yes", "No") AS ?AwardWon)
+}ORDER BY DESC(?MovieLabel) 
+
+
+
+4)Give list of all movies whose remake was made after 1 year in different language
+
+SELECT DISTINCT ?OriginalTitle ?OriginalDate  ?OriginalLanguageLabel ?RemakeTitle ?RemakeDate ?RemakeLanguage  WHERE {
+  ?RemakeMovie wdt:P31 wd:Q11424 ;  # instances of films
+         wdt:P144 ?Original . # find the original work
+         ?Original wdt:P31 wd:Q11424 . # original work should also be a film
+  ?RemakeMovie wdt:P577 ?RemakeDate . # remake publication date of the movie
+  ?Original wdt:P577 ?OriginalDate. #original publication date
+  ?Original wdt:P1476 ?OriginalTitle. 
+  ?RemakeMovie wdt:P1476 ?RemakeTitle.
+  ?Original wdt:P364 ?OriginalLanguage
+  FILTER(YEAR(?RemakeDate)-YEAR(?OriginalDate) = 1) # filter movies whose remake was made 10 year later
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
+  BIND(lang(?RemakeTitle) AS ?RemakeLanguage)
+}ORDER BY ?OriginalLabel
+
+
+5)Give the count of movies that belonged to a series and were directed by the same director
+
+SELECT DISTINCT (GROUP_CONCAT(DISTINCT ?MovieLabel; separator=", ") AS ?Movies) ?SeriesLabel ?DirectorLabel (COUNT(?movie) AS ?Count)
+WHERE {
+  ?movie wdt:P31 wd:Q11424. #find instances of movie type
+  ?movie wdt:P921 wd:Q430. #find movies with main subject as Dinosaur
+  ?movie wdt:P179 ?series. #find movies that belong to a series
+  ?movie wdt:P57 ?director #find directors of those movies
+
+   SERVICE wikibase:label {  #SERVICE is the keyword to retrieve all labels
+   bd:serviceParam wikibase:language "en".
+   ?movie rdfs:label ?MovieLabel.
+   ?series rdfs:label ?SeriesLabel.
+   ?director rdfs:label ?DirectorLabel
+   }
+  }GROUP BY ?DirectorLabel ?SeriesLabel ?Movies
+ORDER BY ?SeriesLabel
+
+
+6)Find all the movies of Jurassic Park series and check whether Jeff Goldblum starred in all the movies?
+
+SELECT ?FilmLabel ?Goldblum
+WHERE {
+  # find all the films in the Jurassic Park series
+  ?film wdt:P179 wd:Q17862144 .
+  # retrieve the label of the film
+  ?film rdfs:label ?FilmLabel .
+  FILTER (lang(?FilmLabel) = "en") .
+  # check whether Jeff Goldblum starred in the film
+  OPTIONAL {
+    ?film wdt:P161 ?actor .
+    ?actor wdt:P31 wd:Q5 .
+    FILTER (?actor = wd:Q106706) .
+    BIND("Yes" AS ?Goldblum)
+  }
+  BIND(IF(bound(?Goldblum), ?Goldblum, "No") AS ?Goldblum)
+}
+ORDER BY ?FilmLabel
+
+7)Give a list of all the Academy awards titanic was nominated for and state whether it won that award
+
+SELECT  ?AwardLabel ?Won 
+WHERE {
+  # retrieve all nominated awards for the movie
+  wd:Q44578 wdt:P1411 ?award. #get all the awards Titanic was nominated for
+  # check if the movie won each award
+  OPTIONAL {
+    wd:Q44578 wdt:P166 ?awardWon. #check if Titanic won any awards
+    FILTER(?award = ?awardWon) #Filter conditions when nominated award and won award are saw
+    BIND("Yes" AS ?Won) #set those instances as yes
+  }
+  SERVICE wikibase:label {  #SERVICE is the keyword to retrieve all labels
+   bd:serviceParam wikibase:language "en".
+   ?award rdfs:label ?AwardLabel.
+   }
+  BIND(IF(BOUND(?Won), ?Won, "No") AS ?Won) #if not set condition as no
+  FILTER(REGEX(?AwardLabel, "^academy award.*", "i")).
+}ORDER BY ?AwardLabel
+
+
+ 
+
+
+
+
+
+
